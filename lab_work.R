@@ -1,6 +1,7 @@
 library(rio)
 library(tidyverse)
 library(lubridate)
+#Apparently some saucy palettes in here :O for scale continuous
 library(viridis) 
 file_loc <- "C:/Users/Stephen/Desktop/University Work/Year 3 uni/St344/"
 monthYears <- paste0(month.abb[c(3:12,1:8)], "_", c(rep(18,10),rep(19,8)))
@@ -60,24 +61,39 @@ covData %>%
 
 
 #importing next dataset which involves which patients are registered at each practice
-app_gp_coverage <- import(paste0(file_loc, "Appointments_GP_Daily_Aug19/APPOINTMENTS_GP_COVERAGE.csv"), setclass = "tibble")
+app_gp_coverage <- import(paste0(file_loc, "Appointments_GP_Daily_Aug19/APPOINTMENTS_GP_COVERAGE.csv"), setclass = "tibble")%>%
+  mutate(Appointment_Month = parse_date_time(Appointment_Month, "%d-%b-%Y")) %>%
+  mutate(month_year = parse_date_time(Appointment_Month, "%Y-%m"))
 
 for (i in 1:length(colnames(app_gp_coverage))) {
   colnames(app_gp_coverage)[i] = tolower(colnames(app_gp_coverage)[i])
 }
 
 
-##combining the two datasets for future use ~ Not sure from this point onwards tbh,763k rows seems way too many
+##combining the two datasets for future use ~ Not sure from this point onwards tbh
+#Filtered to only contain extra information where necessary
 data <- left_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_organisation_code"))
-data <- inner_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_organisation_code"))
+data <- inner_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_organisation_code")) %>% 
+  filter(year(appointment_date) == year(appointment_month) &
+           month(appointment_date) == month(appointment_month))
 
 ##Copy pasted code from the modelling section of the lab
 
-groupData <- group_by(covData, date)
-sumData <- summarise(groupData, COUNT=sum(COUNT_OF_APPOINTMENTS))
-sumData <- mutate(sumData, Weekday=wday(date, label=TRUE))
-sumData <- mutate(sumData, monthYear=paste(month(date,label=TRUE), year(date)))
-sumData <- left_join(sumData, select(listSize,-c(date,Appointment_Month)), by="monthYear")
-sumData <- mutate(sumData, log_registered_patients = log(`Patients registered at included practices`))
-my_model <- glm(COUNT ~ 0 + Weekday + offset(log_registered_patients), family="poisson", data=sumData)
+poisson_data <- data %>%
+  group_by(appointment_date) %>%
+  summarise(count = sum(count_of_appointments)) %>%
+  mutate(weekday = wday(appointment_date, label=TRUE),
+         month_year = paste(month(appointment_date, label = TRUE), year(appointment_date))) %>%
+  left_join(data, app_gp_coverage, by = c("appointment_date")) %>%
+  filter(year(appointment_date) == year(appointment_month) &
+           month(appointment_date) == month(appointment_month)) %>%
+  mutate(log_registered_patients = log(`patients registered at included practices`)) %>%
+  select(appointment_date, count, weekday, log_registered_patients) %>%
+  unique()
+
+#Not wholey convinced by this lol  
+my_model <- glm(count ~ 0 + weekday + offset(log_registered_patients), family="poisson", data=poisson_data)
+
+#Not really sure about this at all lol
+my_model$coefficients[2]/my_model$coefficients[6]
 
