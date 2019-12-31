@@ -1,0 +1,13 @@
+---
+title: "St344 Individual Coursework U1619685"
+author: "Stephen Brownsey"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Lab work
+This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the project
+
