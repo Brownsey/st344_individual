@@ -116,6 +116,18 @@ my_model$coefficients[2]/my_model$coefficients[6]
 #Graph datapoints by week to take account of different
 #Colour the graph potentially by season and also by  type of appointment
 #Getting data by week:
+
+#Seasons data: https://www.timeanddate.com/calendar/seasons.html, based on the equinoxes
+#
+seasons <- tibble(season = c("winter", "spring", "summer","autumn"),
+                  start_date = c(as.Date("2017-12-21"), as.Date("2018-03-20"),
+                                 as.Date("2018-06-20"), as.Date("2018-09-23"),
+                                 as.Date("2018-12-21"), as.Date("2019-03-20"),
+                                 as.Date("2019-06-20"), as.Date("2019-09-23")),
+                  end_date = c(as.Date("2018-03-19"), as.Date("2018-06-19"),
+                               as.Date("2018-09-22"), as.Date("2018-12-20"),
+                               as.Date("2019-03-19"), as.Date("2019-06-19"),
+                               as.Date("2019-09-22"), as.Date("2019-12-20")))
 data <- data %>%
   #Detecting week number of appointment date
   mutate(week_num = isoweek(appointment_date)) %>%
@@ -124,7 +136,8 @@ data <- data %>%
   mutate(week_num = week_num + (52 * year)) %>%
   #Taking account of the fact that 1 actually refers to week 53
   mutate(week_num = if_else(week_num == 1, 53, week_num)) %>%
-  mutate(week_num = week_num - 8)
+  mutate(week_num = week_num - 8) %>%
+  mutate(season = if_else(appointment_date ))
 
 
 #Count summaries of the data by
@@ -155,6 +168,7 @@ data %>%
 
 
 ##Therefore we remove these two weeks (9 and 52).
+#Note: don't have data for gp count per practice and hence modelling demand by overall appointments in the Cov Area
 data <- data %>%
   filter(!week_num %in% c(9, 52))
 
@@ -183,7 +197,9 @@ appt_by_mode %>%
   ggplot(aes(x = week_num, y = count)) +
   geom_point()
 
+#Don't know which category these should be in and therefore choosing to ignore although it seems to be the only with an
+#Increase in the number
 appt_by_mode %>%
   filter(appt_mode == "Unknown") %>%
-  ggplot(aes(x = week_num, y = count)) +wwwwwww
+  ggplot(aes(x = week_num, y = count)) +
   geom_point()

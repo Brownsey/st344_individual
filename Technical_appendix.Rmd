@@ -9,5 +9,201 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Lab work
-This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the project
+This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets.
 
+```{r lab_functions}
+hadley_format <- function(data){
+  for (i in 1:length(colnames(data))) {
+  colnames(data)[i] = tolower(colnames(data)[i])
+  }
+  data
+}
+```
+
+
+```{r lab, warning = FALSE}
+#Setting up the file path and loading in the .csv files
+file_loc <- "C:/Users/Stephen/Desktop/University Work/Year 3 uni/St344/"
+monthYears <- paste0(month.abb[c(3:12,1:8)], "_", c(rep(18,10),rep(19,8)))
+d <- list()
+for (i in 1:length(monthYears)) {
+  filename <- paste0(file_loc, "Appointments_GP_Daily_Aug19/CCG_CSV_", monthYears[i], ".csv")
+  d[[i]] <- import(filename, setclass = "tibble")
+}
+
+#Checking whether each file has the same number of columns
+a <- TRUE
+for(i in 1:length(d)){
+  cols_1 <- length(d[[1]])
+  if(cols_1 - length(d[[i]]) != 0){
+    a <- FALSE
+  }
+  a
+}
+a
+
+#Loading in the Coventry Data from the files
+covData <- tibble()
+for (i in 1:length(monthYears)) {
+  covData <- rbind(covData, filter(d[[i]], CCG_NAME=="NHS Coventry and Rugby CCG"))
+}
+
+#This code removes the d variable from the environment and should speed things up
+#As the d variable is over 500mb and can cause performance issues in rstudio
+#remove(d)
+
+covData <- select(covData, Appointment_Date, APPT_STATUS, HCP_TYPE, APPT_MODE, TIME_BETWEEN_BOOK_AND_APPT, CCG_CODE,
+                  COUNT_OF_APPOINTMENTS) %>%
+  mutate(Appointment_Date = parse_date_time(Appointment_Date, "%d-%b-%Y")) %>%
+  #Changing the letters to lower case to match Hadley Wickhams style guide
+  hadley_format() %>%
+  #updating the appointment_date variable
+  mutate(appointment_data = mdy(appointment_date))
+
+#Looking at number of appointments by each mode
+appt_by_mode <- covData %>% 
+  group_by(appt_mode) %>%
+  summarise(count = sum(count_of_appointments))
+
+#Produce a plot line in the lab to ensure my code thus far is correct
+covData %>% 
+  group_by(appointment_date) %>%
+  summarise(count = sum(count_of_appointments)) %>%
+  ggplot() +
+  geom_point(aes(x = appointment_date, y = count,
+                 colour = wday(appointment_date, label = TRUE, abbr = TRUE))) +
+  labs(x = "Date", y = "Number of Combined Hospital Appointments",
+       title = "Combined Hospital Visits by Date",
+       colour = "Day of Week") +
+  theme_bw() +
+  #Can customise colours in due course if required inside next line
+  scale_colour_discrete()
+
+#importing next dataset which involves which patients are registered at each practice
+app_gp_coverage <- import(paste0(file_loc,
+                                 "Appointments_GP_Daily_Aug19/APPOINTMENTS_GP_COVERAGE.csv"),
+                          setclass = "tibble") %>%
+  mutate(Appointment_Month = parse_date_time(Appointment_Month, "%d-%b-%Y")) %>%
+  hadley_format()
+
+##combining the two datasets for future use
+#Filtered to only contain extra information where necessary
+data <- left_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_organisation_code"))
+data <- inner_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_organisation_code")) %>% 
+  filter(year(appointment_date) == year(appointment_month) &
+           month(appointment_date) == month(appointment_month))
+```
+
+## Demand on Coventry GPs
+ INSERT R Markdown intro:
+Since there is no data for number of GPs per practice, there is insufficient data to work out an appointment/GP number and hence demand will be modelled by overall appointments in the Cov Area. If this data had been available, then the average time of each visit type and number could have been averaged out over the GPs to find a demand average for GPs but sadly this wasn't available. Appointments which were not attended are still used for the count as the GP still had to be available to answer the person. The counts have been summed by week to take account of differences between days and too try and *absorb* some of that variability.
+
+Want really to compare results for which we have two measurements for in almost a paired t-test but only 18 months is slightly problematic...
+
+```{r demand_functions, warning=FALSE}
+#Graphing function for visual aids on the appointment counts
+appt_count <- function(data, filter = "No Filter"){
+  if(!filter == "No Filter"){
+    #Updating data with filter
+    data <- data %>%
+      filter(appt_mode == filter)
+    #Plot with no filter (include legend)
+  output <- data %>%
+    ggplot(aes(x = week_num, y = count)) + 
+    geom_point() +
+    geom_smooth(colour = "blue") + 
+    geom_smooth(method = "lm", colour = "red") +
+    theme_bw() +
+    labs(title = paste0("Weekly Appointment Count with: ", filter),
+         x = "Week Number", y = "Weekly Appointment Count") 
+  }else{
+  output <- data %>%
+    ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
+    geom_point() +
+    theme_bw()  + 
+    labs(title = paste0("Weekly Appointment Count with: ", filter),
+         x = "Week Number", y = "Weekly Appointment Count") +
+    theme(legend.position = "none")
+  }
+  
+  output
+}
+```
+ 
+```{r demand_setup}
+#Seasons data as per: https://www.timeanddate.com/calendar/seasons.html
+seasons <- tibble(season = c("winter", "spring", "summer","autumn",
+                             "winter", "spring", "summer","autumn"),
+                  start_date = c(as.Date("2017-12-21"), as.Date("2018-03-20"),
+                                 as.Date("2018-06-20"), as.Date("2018-09-23"),
+                                 as.Date("2018-12-21"), as.Date("2019-03-20"),
+                                 as.Date("2019-06-20"), as.Date("2019-09-23")),
+                  end_date = c(as.Date("2018-03-19"), as.Date("2018-06-19"),
+                               as.Date("2018-09-22"), as.Date("2018-12-20"),
+                               as.Date("2019-03-19"), as.Date("2019-06-19"),
+                               as.Date("2019-09-22"), as.Date("2019-12-20"))) 
+ 
+ data <- data %>%
+  #Detecting week number of appointment date
+  mutate(week_num = isoweek(appointment_date)) %>%
+  mutate(year = year(appointment_date)) %>%
+  mutate(year = if_else(year == 2018, 0, 1)) %>%
+  mutate(week_num = week_num + (52 * year)) %>%
+  #Taking account of the fact that 1 actually refers to week 53
+  mutate(week_num = if_else(week_num == 1, 53, week_num)) %>%
+  mutate(week_num = week_num - 8) %>%
+  mutate(season = if_else(appointment_date ))
+
+#Count summaries of the data by appointment mode and week
+appt_by_mode <- data %>% 
+  group_by(appt_mode, week_num) %>%
+  summarise(count = sum(count_of_appointments)) %>%
+  ungroup()
+
+#General plot for understanding
+appt_by_mode %>%
+  ggplot() +
+  geom_point(aes(x = week_num, y = count, colour = appt_mode)) +
+  theme_bw()
+
+#Looking into the two low results for Face-to-Face
+appt_by_mode %>% 
+  filter(count < 20000 & appt_mode == "Face-to-Face")
+
+#Returns week 9 (first week and not a full one, only 4 results) and 52 (over Christmas so less visits)
+data %>%
+  filter(week_num %in% c(9, 52)) %>%
+  select(appointment_date) %>%
+  unique()
+
+#No appointments on 30th December - CHECK
+data %>% 
+  filter(str_detect(appointment_date, '12-30'))
+
+##Therefore we remove these two weeks (9 and 52) as they seem to be anomalous in comparison to others.
+data <- data %>%
+  filter(!week_num %in% c(9, 52))
+```
+
+```{r demand_eda_graphs}
+#Graphically exploring the different visit types and 
+appt_by_mode <- data %>% 
+  group_by(appt_mode, week_num) %>%
+  summarise(count = sum(count_of_appointments)) %>%
+  ungroup()
+
+appt_by_mode %>%
+  appt_count()
+
+appt_by_mode %>%
+  appt_count("Face-to-Face")
+
+appt_by_mode %>%
+  appt_count("Home Visit")
+
+appt_by_mode %>%
+  appt_count("Telephone")
+
+appt_by_mode %>%
+  appt_count("Unknown")
+```
