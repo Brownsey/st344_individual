@@ -109,21 +109,20 @@ appt_count <- function(data, filter = "No Filter"){
       filter(appt_mode == filter)
     #Plot with no filter (include legend)
   output <- data %>%
-    ggplot(aes(x = week_num, y = count)) + 
+    ggplot(aes(x = week_num, y = count, colour = season_median)) + 
     geom_point() +
     geom_smooth(colour = "blue") + 
     geom_smooth(method = "lm", colour = "red") +
     theme_bw() +
     labs(title = paste0("Weekly Appointment Count with: ", filter),
-         x = "Week Number", y = "Weekly Appointment Count") 
+         x = "Week Number", y = "Weekly Appointment Count", colour = "Season") 
   }else{
   output <- data %>%
     ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
     geom_point() +
     theme_bw()  + 
     labs(title = paste0("Weekly Appointment Count with: ", filter),
-         x = "Week Number", y = "Weekly Appointment Count") +
-    theme(legend.position = "none")
+         x = "Week Number", y = "Weekly Appointment Count", colour = "Appointment Type")
   }
   
   output
@@ -133,16 +132,17 @@ appt_count <- function(data, filter = "No Filter"){
 ```{r demand_setup}
 #Seasons data as per: https://www.timeanddate.com/calendar/seasons.html
 seasons <- tibble(season = c("winter", "spring", "summer","autumn",
-                             "winter", "spring", "summer","autumn"),
+                             "winter", "spring", "summer"),
                   start_date = c(as.Date("2017-12-21"), as.Date("2018-03-20"),
                                  as.Date("2018-06-20"), as.Date("2018-09-23"),
                                  as.Date("2018-12-21"), as.Date("2019-03-20"),
-                                 as.Date("2019-06-20"), as.Date("2019-09-23")),
+                                 as.Date("2019-06-20")),
                   end_date = c(as.Date("2018-03-19"), as.Date("2018-06-19"),
                                as.Date("2018-09-22"), as.Date("2018-12-20"),
                                as.Date("2019-03-19"), as.Date("2019-06-19"),
-                               as.Date("2019-09-22"), as.Date("2019-12-20"))) 
- 
+                               as.Date("2019-09-22"))) 
+
+#Some changes to the data, adding in season and week number to each observation 
  data <- data %>%
   #Detecting week number of appointment date
   mutate(week_num = isoweek(appointment_date)) %>%
@@ -152,19 +152,57 @@ seasons <- tibble(season = c("winter", "spring", "summer","autumn",
   #Taking account of the fact that 1 actually refers to week 53
   mutate(week_num = if_else(week_num == 1, 53, week_num)) %>%
   mutate(week_num = week_num - 8) %>%
-  mutate(season = if_else(appointment_date ))
+  #Changing class of appointment date variable for easier comparisons
+  mutate(appointment_date = appointment_date %>% substr(1,10) %>% as.Date()) %>%
+  #Adding
+  mutate(season = if_else(between(appointment_date,
+                                  seasons$start_date[1],seasons$end_date[1]), "winter",
+                  if_else(between(appointment_date,
+                                  seasons$start_date[2],seasons$end_date[2]), "spring",
+                  if_else(between(appointment_date
+                                  , seasons$start_date[3],seasons$end_date[3]), "summer",
+                  if_else(between(appointment_date
+                                  , seasons$start_date[4],seasons$end_date[4]), "autumn",
+                  if_else(between(appointment_date
+                                  , seasons$start_date[5],seasons$end_date[5]), "winter",
+                  if_else(between(appointment_date
+                                  , seasons$start_date[6],seasons$end_date[6]), "spring",
+                  if_else(between(appointment_date
+                                  , seasons$start_date[7],seasons$end_date[7]), "summer",
+                                  "Error")))))))) 
+ 
+ 
+ 
+ 
+# Making adjustment as some weeks may contain dates from different seasons
+# Use median as 7 days in a week so only modal one will occur
+temp <- data %>%
+   mutate(season_num = if_else(season == "winter", 1,
+                       if_else(season == "spring", 2,
+                       if_else(season == "summer", 3 , 4)))) %>%
+   select(week_num, appointment_date,season, season_num) %>%
+   unique() %>%
+   select(week_num, season,season_num) %>%
+   group_by(week_num) %>%
+   summarise(count = median(season_num)) %>% 
+   mutate(season_median = if_else(count == 1, "winter", 
+                          if_else(count == 2, "spring", 
+                          if_else(count == 3, "summer", "autumn")))) %>%
+  select(week_num, season_median)
+
+
+data <- data %>%
+  inner_join(temp)
 
 #Count summaries of the data by appointment mode and week
 appt_by_mode <- data %>% 
-  group_by(appt_mode, week_num) %>%
+  group_by(appt_mode, week_num, season_median) %>%
   summarise(count = sum(count_of_appointments)) %>%
   ungroup()
 
 #General plot for understanding
 appt_by_mode %>%
-  ggplot() +
-  geom_point(aes(x = week_num, y = count, colour = appt_mode)) +
-  theme_bw()
+  appt_count()
 
 #Looking into the two low results for Face-to-Face
 appt_by_mode %>% 
@@ -188,7 +226,7 @@ data <- data %>%
 ```{r demand_eda_graphs}
 #Graphically exploring the different visit types and 
 appt_by_mode <- data %>% 
-  group_by(appt_mode, week_num) %>%
+  group_by(appt_mode, week_num, season_median) %>%
   summarise(count = sum(count_of_appointments)) %>%
   ungroup()
 
@@ -203,7 +241,9 @@ appt_by_mode %>%
 
 appt_by_mode %>%
   appt_count("Telephone")
-
-appt_by_mode %>%
-  appt_count("Unknown")
+#For the purposes of the question "Unknown" will not be considered
+# appt_by_mode %>%
+#   appt_count("Unknown")
 ```
+
+Splitting the data by
