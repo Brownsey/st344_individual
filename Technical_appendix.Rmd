@@ -288,8 +288,9 @@ temp_data <- stat_data %>%
   filter(appt_mode == type)  
   
 #Test the normality assumption of the data
+normal <- TRUE
 if(shapiro.test(temp_data$count)$p.value < 0.05){
-  return("Data Not normal")
+  normal <- FALSE
 }
 
 #Checking validity of equal variance
@@ -306,10 +307,15 @@ year_2 <- temp_data %>%
 set.seed(666)
 min_length <- min(length(year_1), length(year_2))
 
+#Defining data in another format for latter parts
+test_data <- tibble(year_1 = year_1 %>% sample(min_length),
+                    year_2 = year_2 %>% sample(min_length))
+
+#t-test section
+if(normal){
+  
 #Sampling for F-test if numbers are different
 #Replace = FALSE by default.
-var_test_data <- tibble(year_1 = year_1 %>% sample(min_length),
-                    year_2 = year_2 %>% sample(min_length))
 
 variance <- TRUE
 #Compares the p.value from F-test and changes the variance check accordingly
@@ -320,41 +326,59 @@ if(tidy(var.test(test_data$year_1,
   variance <- FALSE
   }
 if(variance == FALSE){
+  test <- "Welch"
   #Run Welch test where variance assumption NOT assumed
   t_test <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
                         alternative = "greater")) %>%
-  select(p.value)
+  select(p.value) %>% as_vector()
   if(t_test < 0.05){
     return("H1 True")
   }else{
     return("H0 True")
 }
 }else{
+  test <- "Students"
   #Run students were the variance is assumed
-  t_test <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
+  p_value <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
                         var.equal=TRUE ,alternative = "greater")) %>%
-  select(p.value)
+  select(p.value)  %>% as_vector()
+
+}
+
+}else{
+  test <- "Wilcoxon"
+  #Run the wilcoxon sign ranked test if normality assumption failed
+  p_value <- tidy(wilcox.test(test_data$year_2 , test_data$year_1,
+                              paired = TRUE, alternative = "greater")) %>%
+  select(p.value) %>% as_vector()
+}
+  #Conclusion
   if(t_test < 0.05){
-    return("H1 True")
+    outcome <- "H1 True"
   }else{
-    return("H0 True")
+    outcome <- "H0 True"
 }
-}
+
+output <- tibble(appt_mode = type, season = season, test = test,
+                 p_value = p_value, conclusion = outcome)
+output
+
 
 
 }
 
 #Now run the paired T-Test on the data
-stat_test(stat_data, "Telephone", "summer")
-stat_test(stat_data, "Telephone", "winter")
-stat_test(stat_data, "Telephone", "autumn")
-stat_test(stat_data, "Telephone", "spring")
-stat_test(stat_data, "Face-to-Face", "summer")
-stat_test(stat_data, "Face-to-Face", "winter")
-stat_test(stat_data, "Face-to-Face", "autumn")
-stat_test(stat_data, "Face-to-Face", "spring")
-stat_test(stat_data, "Home Visit", "spring")
-stat_test(stat_data, "Home Visit", "winter")
-stat_test(stat_data, "Home Visit", "autumn")
-stat_test(stat_data, "Home Visit", "spring")
+stat_table <- stat_test(stat_data, "Telephone", "summer") %>%
+  rbind(stat_test(stat_data, "Telephone", "winter")) %>%
+  rbind(stat_test(stat_data, "Telephone", "autumn")) %>%
+  rbind(stat_test(stat_data, "Telephone", "spring")) %>%
+  rbind(stat_test(stat_data, "Face-to-Face", "summer")) %>%
+  rbind(stat_test(stat_data, "Face-to-Face", "winter")) %>%
+  rbind(stat_test(stat_data, "Face-to-Face", "autumn")) %>%
+  rbind(stat_test(stat_data, "Face-to-Face", "spring")) %>%
+  rbind(stat_test(stat_data, "Home Visit", "spring")) %>%
+  rbind(stat_test(stat_data, "Home Visit", "winter")) %>%
+  rbind(stat_test(stat_data, "Home Visit", "autumn")) %>%
+  rbind(stat_test(stat_data, "Home Visit", "spring"))
+stat_table
 ```
