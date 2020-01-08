@@ -270,16 +270,17 @@ my_model <- glm(count ~ 0 + week_num + season_median , family = "poisson", data 
 
 ## Statistical significance tests
 Splitting the data by season for compared t-test would give an option to test if the seasons themselves have increased between the two years. Obviously the cold weather will lead to more illnesses.
+The following function uses a paired t-test to calculate whether the differences are statistically significant or not. It will either use a Welch's test if the variances are not equal, a students t-test if they are or if the data is not normal then it will perform a Wilcoxon Sign Ranked Test on the data.
 
 
 ```{r}
+#Extracting the data to be used in these tests
 stat_data <- data %>%
   #Give a 0 or 1 as a year column for paired t-testing.
   mutate(year == year(appointment_date)) %>%
   select(appt_mode, week_num, season_median, year, count) %>% 
   unique()
   
-
 stat_test <- function(data, type, season){
 #Updating data
 temp_data <- stat_data %>%
@@ -346,5 +347,14 @@ if(variance == FALSE){
 #Now run the paired T-Test on the data
 stat_test(stat_data, "Telephone", "summer")
 stat_test(stat_data, "Telephone", "winter")
-
+stat_test(stat_data, "Telephone", "autumn")
+stat_test(stat_data, "Telephone", "spring")
+stat_test(stat_data, "Face-to-Face", "summer")
+stat_test(stat_data, "Face-to-Face", "winter")
+stat_test(stat_data, "Face-to-Face", "autumn")
+stat_test(stat_data, "Face-to-Face", "spring")
+stat_test(stat_data, "Home Visit", "spring")
+stat_test(stat_data, "Home Visit", "winter")
+stat_test(stat_data, "Home Visit", "autumn")
+stat_test(stat_data, "Home Visit", "spring")
 ```
