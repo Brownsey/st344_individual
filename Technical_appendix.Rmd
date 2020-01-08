@@ -8,8 +8,14 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r, libraries}
+library(tidyverse)
+library(lubridate)
+library(broom)
+```
 ## Lab work
 This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets.
+
 
 ```{r lab_functions}
 hadley_format <- function(data){
@@ -115,7 +121,8 @@ appt_count <- function(data, filter = "No Filter"){
     geom_smooth(method = "lm", colour = "red") +
     theme_bw() +
     labs(title = paste0("Weekly Appointment Count with: ", filter),
-         x = "Week Number", y = "Weekly Appointment Count", colour = "Season") 
+         x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
+    scale_colour_manual("Season", values = c("darkorange1", "springgreen3","gold", "royalblue2"))
   }else{
   output <- data %>%
     ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
@@ -244,6 +251,100 @@ appt_by_mode %>%
 #For the purposes of the question "Unknown" will not be considered
 # appt_by_mode %>%
 #   appt_count("Unknown")
+
+#Joining the data appt_by_mode data to original data
+data <- data %>%
+  inner_join(appt_by_mode)
 ```
 
-Splitting the data by
+## Fitting a poison model to the data as in the lab
+```{r}
+poisson_data <- appt_by_mode %>%
+  #mutate(log_registered_patients = log(`patients registered at included practices`)) %>%
+  select(appointment_date, count, weekday, log_registered_patients) %>%
+  unique()
+
+my_model <- glm(count ~ 0 + week_num + season_median , family = "poisson", data = appt_by_mode) #+ offset(log_registered_patients)
+```
+
+
+## Statistical significance tests
+Splitting the data by season for compared t-test would give an option to test if the seasons themselves have increased between the two years. Obviously the cold weather will lead to more illnesses.
+
+
+```{r}
+stat_data <- data %>%
+  #Give a 0 or 1 as a year column for paired t-testing.
+  mutate(year == year(appointment_date)) %>%
+  select(appt_mode, week_num, season_median, year, count) %>% 
+  unique()
+  
+
+stat_test <- function(data, type, season){
+#Updating data
+temp_data <- stat_data %>%
+  filter(season_median == season) %>%
+  filter(appt_mode == type)  
+  
+#Test the normality assumption of the data
+if(shapiro.test(temp_data$count)$p.value < 0.05){
+  return("Data Not normal")
+}
+
+#Checking validity of equal variance
+year_1 <- temp_data %>%
+  filter(year == 0) %>%
+  select(count) %>%
+  as_vector()
+year_2 <- temp_data %>%
+  filter(year == 1) %>%
+  select(count) %>%
+  as_vector()
+
+#Setting seed to ensure reproducibility
+set.seed(666)
+min_length <- min(length(year_1), length(year_2))
+
+#Sampling for F-test if numbers are different
+#Replace = FALSE by default.
+var_test_data <- tibble(year_1 = year_1 %>% sample(min_length),
+                    year_2 = year_2 %>% sample(min_length))
+
+variance <- TRUE
+#Compares the p.value from F-test and changes the variance check accordingly
+if(tidy(var.test(test_data$year_1,
+                   test_data$year_2)) %>%
+  select(p.value) %>% as_vector() < 0.05){
+ #Varaince test significant -> variances NOT Equal 
+  variance <- FALSE
+  }
+if(variance == FALSE){
+  #Run Welch test where variance assumption NOT assumed
+  t_test <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
+                        alternative = "greater")) %>%
+  select(p.value)
+  if(t_test < 0.05){
+    return("H1 True")
+  }else{
+    return("H0 True")
+}
+}else{
+  #Run students were the variance is assumed
+  t_test <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
+                        var.equal=TRUE ,alternative = "greater")) %>%
+  select(p.value)
+  if(t_test < 0.05){
+    return("H1 True")
+  }else{
+    return("H0 True")
+}
+}
+
+
+}
+
+#Now run the paired T-Test on the data
+stat_test(stat_data, "Telephone", "summer")
+stat_test(stat_data, "Telephone", "winter")
+
+```
