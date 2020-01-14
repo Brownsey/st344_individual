@@ -100,6 +100,9 @@ poisson_data <- data %>%
 
 #Not wholey convinced by this lol  
 my_model <- glm(count ~ 0 + weekday + offset(log_registered_patients), family="poisson", data=poisson_data)
+#Need to work out how to plot it on lol
+my_model$model$fitted <- predict(my_model, type = "response")
+a <- ggplot(my_model$model) + geom_point(aes(weekday, count)) + geom_line(aes(weekday, fitted))
 
 #Not really sure about this at all lol
 my_model$coefficients[2]/my_model$coefficients[6]

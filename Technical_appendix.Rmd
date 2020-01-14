@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(broom)
+library(car)
 ```
 ## Lab work
 This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets.
@@ -103,6 +104,7 @@ data <- inner_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_o
 ## Demand on Coventry GPs
  INSERT R Markdown intro:
 Since there is no data for number of GPs per practice, there is insufficient data to work out an appointment/GP number and hence demand will be modelled by overall appointments in the Cov Area. If this data had been available, then the average time of each visit type and number could have been averaged out over the GPs to find a demand average for GPs but sadly this wasn't available. Appointments which were not attended are still used for the count as the GP still had to be available to answer the person. The counts have been summed by week to take account of differences between days and too try and *absorb* some of that variability.
+There has also been no subsetting based on hcp_type -> might need to add that in potentially.
 
 Want really to compare results for which we have two measurements for in almost a paired t-test but only 18 months is slightly problematic...
 
@@ -180,7 +182,6 @@ seasons <- tibble(season = c("winter", "spring", "summer","autumn",
  
  
  
- 
 # Making adjustment as some weeks may contain dates from different seasons
 # Use median as 7 days in a week so only modal one will occur
 temp <- data %>%
@@ -200,6 +201,10 @@ temp <- data %>%
 
 data <- data %>%
   inner_join(temp)
+
+#Saving the data before I remove the anonyamous weeks
+#For use in part two of the report
+part_2_data <- data
 
 #Count summaries of the data by appointment mode and week
 appt_by_mode <- data %>% 
@@ -269,8 +274,36 @@ my_model <- glm(count ~ 0 + week_num + season_median , family = "poisson", data 
 
 
 ## Statistical significance tests
+Looking at the graph generated above, makes sense that season would be a factor to the count. So will be looking into that in the following code. Use Anova test if variance assumption holds - otherwise use the kruskal wallace test. Where the assumption is that all the groups have the same variance.
+```{r anova_seasons}
+checking_seasons <- function(data, appt_type){
+  #Variance assumption (checking they are the same)
+  season_check <- data %>% filter(appt_mode == appt_type) %>%
+    select(appt_mode, season_median, count) %>% 
+    unique()
+  #if < 0.05 use anova otherwise use kruskal wallace
+  var_value <- leveneTest(count ~ season_median, data = season_check)[1,3]
+  if(var_value < 0.05){
+    test <- "Kruskal"
+    #Kruskal Wallace test
+    p_value <- kruskal.test(count ~ season_median, data = season_check)$p.value
+     
+  }else{
+    test <- "Anova"
+    #Running the anova  test
+  anova1 <- aov(count ~ season_median, data = season_check)
+  p_value <- summary(anova1)[[1]][1,5]
+  }
+tibble(appt_type = appt_type, test = test, p_value = p_value)
+}
+
+checking_seasons(data, "Face-to-Face") %>%
+  bind_rows(checking_seasons(data, "Telephone")) %>%
+  bind_rows(checking_seasons(data, "Home Visit"))
+
+```
 Splitting the data by season for compared t-test would give an option to test if the seasons themselves have increased between the two years. Obviously the cold weather will lead to more illnesses.
-The following function uses a paired t-test to calculate whether the differences are statistically significant or not. It will either use a Welch's test if the variances are not equal, a students t-test if they are or if the data is not normal then it will perform a Wilcoxon Sign Ranked Test on the data.
+The following function uses a paired t-test to calculate whether the differences are statistically significant or not. It will either use a Welch's test if the variances are not equal, a students t-test if they are or if the data is not normal then it will perform a Wilcoxon Sign Ranked Test on the data. Autumn data cannot be considered as only 1 year of autumn data.
 
 
 ```{r}
@@ -370,15 +403,68 @@ output
 #Now run the paired T-Test on the data
 stat_table <- stat_test(stat_data, "Telephone", "summer") %>%
   rbind(stat_test(stat_data, "Telephone", "winter")) %>%
-  rbind(stat_test(stat_data, "Telephone", "autumn")) %>%
   rbind(stat_test(stat_data, "Telephone", "spring")) %>%
   rbind(stat_test(stat_data, "Face-to-Face", "summer")) %>%
   rbind(stat_test(stat_data, "Face-to-Face", "winter")) %>%
-  rbind(stat_test(stat_data, "Face-to-Face", "autumn")) %>%
   rbind(stat_test(stat_data, "Face-to-Face", "spring")) %>%
   rbind(stat_test(stat_data, "Home Visit", "spring")) %>%
   rbind(stat_test(stat_data, "Home Visit", "winter")) %>%
-  rbind(stat_test(stat_data, "Home Visit", "autumn")) %>%
   rbind(stat_test(stat_data, "Home Visit", "spring"))
 stat_table
+```
+The outcome from this table demonstrates that there is a statistically significant increase in the number of appointments between the 2018 and 2019 dates for all appointment types and seasons considered.
+
+
+# Second assignment Questions
+
+
+```{r}
+data <- part_2_data
+
+#Checking unique types of booking times
+data %>% 
+  select(time_between_book_and_appt) %>%
+  unique()
+#Checking unique types of appt_status
+data %>%
+  select(appt_status) %>% 
+  unique()
+
+#Discard all data with Unknown / Data Issue and
+#Appointment status as Uknown or Appt Status Not Provided
+#As only interested in attended/Not attended appointments
+
+data <- data %>%
+  filter(!time_between_book_and_appt == "Unknown / Data Issue") %>%
+  filter(appt_status %in% c("Attended", "DNA")) %>%
+  #Only looking at the GP appointments not attended
+  filter(hcp_type == "GP")
+
+
+data %>%
+  group_by(appt_status, time_between_book_and_appt) %>%
+  summarise(c = mean(count))
+
+total_count <- data %>%
+  select(appointment_date, time_between_book_and_appt, count_of_appointments) %>%
+  group_by(appointment_date, time_between_book_and_appt) %>%
+  summarise(total_count = sum(count_of_appointments)) %>%
+  ungroup()
+
+appt_count <- data %>%
+  select(appointment_date, time_between_book_and_appt, appt_status, count_of_appointments) %>%
+  group_by(appointment_date, time_between_book_and_appt, appt_status) %>%
+  summarise(count = sum(count_of_appointments)) %>%
+  ungroup() %>%
+  inner_join(total_count) %>%
+  mutate(percentage_attendence = 100 *(count/total_count))
+
+#DNA = 100 - Attended so no need to store both
+anova_data <- appt_count %>%
+  filter(appt_status == "DNA")
+
+time_anova <- aov(percentage_attendence ~ time_between_book_and_appt, data = anova_data)
+summary(time_anova)  
+TukeyHSD(time_anova)
+
 ```
