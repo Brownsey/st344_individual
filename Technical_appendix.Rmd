@@ -457,14 +457,39 @@ appt_count <- data %>%
   summarise(count = sum(count_of_appointments)) %>%
   ungroup() %>%
   inner_join(total_count) %>%
-  mutate(percentage_attendence = 100 *(count/total_count))
+  mutate(percentage_attendence = 100 *(count/total_count))  %>%
+  #Add factoring in for time between appt for future plotting and test outputs
+  mutate(time_between_book_and_appt = fct_relevel(time_between_book_and_appt, c("Same Day", "1 Day", "2 to 7 Days",					
+				        "8 to 14 Days",	"15 to 21 Days", "22 to 28 Days","More than 28 Days")))
+
+
+
+
 
 #DNA = 100 - Attended so no need to store both
 anova_data <- appt_count %>%
   filter(appt_status == "DNA")
 
-time_anova <- aov(percentage_attendence ~ time_between_book_and_appt, data = anova_data)
-summary(time_anova)  
-TukeyHSD(time_anova)
+#Variation assumption
+leveneTest(percentage_attendence ~ time_between_book_and_appt, data = anova_data)
+#Since this assumption is NOT valid, it means the anova is not suitable for this data
+#Instead the kruskal-wallis test will be used
+kruskal_time <- kruskal.test(percentage_attendence ~ time_between_book_and_appt, data = anova_data)
+#https://stackoverflow.com/questions/2478272/kruskal-wallis-test-with-details-on-pairwise-comparisons
+#Normally for an anova test a TukeyHSD test would be used to check which ones are not the same
+#E.G have different means
+#For a kruskal wallis test however, Nemenyi-Damico-Wolfe-Dunn test in the package 
+library(coin)
+oneway_test(percentage_attendence ~ as.factor(time_between_book_and_appt), data = anova_data)
+#Seems to be all we need
+library(pgirmess)
+
+#Looks at which comparisons do NOT have the same mean
+tukey_time <- kruskalmc(anova_data$percentage_attendence, anova_data$time_between_book_and_appt)
+tukey_time
+
+tukey_time$dif.com %>%
+  as_tibble() %>%
+  filter(difference == TRUE)
 
 ```
