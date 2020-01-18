@@ -13,6 +13,10 @@ library(tidyverse)
 library(lubridate)
 library(broom)
 library(car)
+library(coin)
+library(pgirmess)
+library(Hmisc)
+library(rio)
 ```
 ## Lab work
 This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets.
@@ -263,13 +267,18 @@ data <- data %>%
 ```
 
 ## Fitting a poison model to the data as in the lab
+Doesn't work at the moment
 ```{r}
+my_model <- glm(count ~ 0 + week_num + season_median + appt_mode , family = "poisson", data = appt_by_mode)
 poisson_data <- appt_by_mode %>%
-  #mutate(log_registered_patients = log(`patients registered at included practices`)) %>%
-  select(appointment_date, count, weekday, log_registered_patients) %>%
-  unique()
+  mutate(poisson_estimate = predict(my_model, type = "response")) %>%
+  ggplot() +
+  geom_point(aes(x = week_num, y = count), colour = "red") +
+  geom_point(aes(x = week_num, y = poisson_estimate), colour = "blue")
+poisson_data
 
-my_model <- glm(count ~ 0 + week_num + season_median , family = "poisson", data = appt_by_mode) #+ offset(log_registered_patients)
+summary(my_model)
+#+ offset(log_registered_patients)
 ```
 
 
@@ -419,14 +428,14 @@ The outcome from this table demonstrates that there is a statistically significa
 
 
 ```{r}
-data <- part_2_data
+data_2 <- part_2_data
 
 #Checking unique types of booking times
-data %>% 
+data_2 %>% 
   select(time_between_book_and_appt) %>%
   unique()
 #Checking unique types of appt_status
-data %>%
+data_2 %>%
   select(appt_status) %>% 
   unique()
 
@@ -434,24 +443,24 @@ data %>%
 #Appointment status as Uknown or Appt Status Not Provided
 #As only interested in attended/Not attended appointments
 
-data <- data %>%
+data_2 <- data_2 %>%
   filter(!time_between_book_and_appt == "Unknown / Data Issue") %>%
   filter(appt_status %in% c("Attended", "DNA")) %>%
   #Only looking at the GP appointments not attended
   filter(hcp_type == "GP")
 
 
-data %>%
+data_2 %>%
   group_by(appt_status, time_between_book_and_appt) %>%
   summarise(c = mean(count))
 
-total_count <- data %>%
+total_count <- data_2 %>%
   select(appointment_date, time_between_book_and_appt, count_of_appointments) %>%
   group_by(appointment_date, time_between_book_and_appt) %>%
   summarise(total_count = sum(count_of_appointments)) %>%
   ungroup()
 
-appt_count <- data %>%
+appt_count <- data_2 %>%
   select(appointment_date, time_between_book_and_appt, appt_status, count_of_appointments) %>%
   group_by(appointment_date, time_between_book_and_appt, appt_status) %>%
   summarise(count = sum(count_of_appointments)) %>%
@@ -459,16 +468,17 @@ appt_count <- data %>%
   inner_join(total_count) %>%
   mutate(percentage_attendence = 100 *(count/total_count))  %>%
   #Add factoring in for time between appt for future plotting and test outputs
+  #Note couple of them had double white spaces
   mutate(time_between_book_and_appt = fct_relevel(time_between_book_and_appt, c("Same Day", "1 Day", "2 to 7 Days",					
-				        "8 to 14 Days",	"15 to 21 Days", "22 to 28 Days","More than 28 Days")))
-
-
-
+				        "8  to 14 Days",	"15  to 21 Days", "22  to 28 Days","More than 28 Days")))
 
 
 #DNA = 100 - Attended so no need to store both
+#Variables with < 20 in the number of appointments can lead to a very highly skewed output based on just a couple of
+#Did not attends
 anova_data <- appt_count %>%
-  filter(appt_status == "DNA")
+  filter(appt_status == "DNA") %>%
+  filter(count > 20)
 
 #Variation assumption
 leveneTest(percentage_attendence ~ time_between_book_and_appt, data = anova_data)
@@ -488,8 +498,29 @@ library(pgirmess)
 tukey_time <- kruskalmc(anova_data$percentage_attendence, anova_data$time_between_book_and_appt)
 tukey_time
 
-tukey_time$dif.com %>%
-  as_tibble() %>%
-  filter(difference == TRUE)
+plot <- anova_data %>%
+  ggplot(aes(x = time_between_book_and_appt, y = percentage_attendence)) +
+  geom_violin(aes(fill = time_between_book_and_appt)) +
+  geom_boxplot(aes(x = time_between_book_and_appt, y = percentage_attendence), width = 0.10) +
+  geom_violin(fill = NA) +
+  theme_bw() +
+  labs(y = "Percentage of Appointments not Attended",x = "Time between Booking and Appointment",
+       title = "Percentage of Appointments not Attended vs Appointment Waiting Time") +
+  theme(legend.position = "none") +
+  #Allowing labels to go onto 2 lines if required
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
+plot
 
+#http://www.sthda.com/english/wiki/ggplot2-violin-plot-quick-start-guide-r-software-and-data-visualization
+  #https://katherinemwood.github.io/post/violins/
+
+anova_data %>%
+  ggplot(aes(x = time_between_book_and_appt, y = percentage_attendence)) +
+  geom_violin(aes(fill = time_between_book_and_appt)) +
+  theme_bw() +
+  labs(y = "Percentage of Appointments not Attended",x = "Time between Booking and Appointment",
+       title = "Percentage of Appointments not Attended vs Appointment Waiting Time") +
+  theme(legend.position = "none") + 
+scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
+                 
 ```
