@@ -123,8 +123,8 @@ appt_count <- function(data, filter = "No Filter"){
   output <- data %>%
     ggplot(aes(x = week_num, y = count, colour = season_median)) + 
     geom_point() +
-    geom_smooth(colour = "blue") + 
-    geom_smooth(method = "lm", colour = "red") +
+    geom_smooth(colour = "blue", se = FALSE) + 
+    geom_smooth(method = "lm", colour = "red", se = FALSE) +
     theme_bw() +
     labs(title = paste0("Weekly Appointment Count with: ", filter),
          x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
@@ -236,7 +236,8 @@ data %>%
 
 ##Therefore we remove these two weeks (9 and 52) as they seem to be anomalous in comparison to others.
 data <- data %>%
-  filter(!week_num %in% c(9, 52))
+  filter(!week_num %in% c(9, 52)) %>%
+  filter(appt_mode %in% c("Face-to-Face", "Telephone", "Home Visit"))
 ```
 
 ```{r demand_eda_graphs}
@@ -269,16 +270,46 @@ data <- data %>%
 ## Fitting a poison model to the data as in the lab
 Doesn't work at the moment
 ```{r}
-my_model <- glm(count ~ 0 + week_num + season_median + appt_mode , family = "poisson", data = appt_by_mode)
-poisson_data <- appt_by_mode %>%
+###One appointment type
+po_data <- appt_by_mode
+  
+my_model <- glm(count ~ 0  + week_num + season_median + appt_mode, family = "poisson", data = po_data)#+ appt_mode
+summary(my_model)
+
+poisson_data <- po_data %>%
   mutate(poisson_estimate = predict(my_model, type = "response")) %>%
   ggplot() +
   geom_point(aes(x = week_num, y = count), colour = "red") +
-  geom_point(aes(x = week_num, y = poisson_estimate), colour = "blue")
+  geom_line(aes(x = week_num, y = poisson_estimate)) 
+  +
+  geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue")
+  
+  + 
+  smooth.spline(poisson_estimate)
 poisson_data
 
+
+
+#Massively overfitted to be honest
+po_data <- appt_by_mode %>%
+   mutate(year_week = as_factor(if_else(week_num > 52, week_num - 52, week_num))) %>%
+  filter(appt_mode == "Telephone")
+my_model_1 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = po_data)
+my_model_2 <- glm(count ~ 0  + week_num + season_median  + year_week, family = "poisson", data = po_data)#+ appt_mode
+
+poisson_data <- po_data %>%
+  mutate(poisson_estimate = predict(my_model_1, type = "response")) %>%
+  mutate(overfitted_estimate = predict(my_model_2, type = "response")) %>%
+  ggplot() +
+  geom_point(aes(x = week_num, y = count), colour = "red") +
+  geom_line(aes(x = week_num, y = poisson_estimate))# +
+  #geom_line(aes(x = week_num, y = overfitted_estimate)) 
++
+  geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue") 
+poisson_data
+
+
 summary(my_model)
-#+ offset(log_registered_patients)
 ```
 
 
@@ -370,7 +401,7 @@ if(tidy(var.test(test_data$year_1,
 if(variance == FALSE){
   test <- "Welch"
   #Run Welch test where variance assumption NOT assumed
-  t_test <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
+  p_value <- tidy(t.test((test_data$year_2 - test_data$year_1), mu = 0,
                         alternative = "greater")) %>%
   select(p.value) %>% as_vector()
   if(t_test < 0.05){
@@ -395,7 +426,7 @@ if(variance == FALSE){
   select(p.value) %>% as_vector()
 }
   #Conclusion
-  if(t_test < 0.05){
+  if(p_value < 0.05){
     outcome <- "H1 True"
   }else{
     outcome <- "H0 True"
