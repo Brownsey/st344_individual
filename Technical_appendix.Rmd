@@ -19,10 +19,12 @@ library(Hmisc)
 library(rio)
 ```
 ## Lab work
-This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets.
+This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets and provided a good base for exploratory data analysis in particuar for pointing out the effect of different days.
 
 
 ```{r lab_functions}
+#function to lower case column names as in general it is better and easier to refer to
+#everything in the lower case
 hadley_format <- function(data){
   for (i in 1:length(colnames(data))) {
   colnames(data)[i] = tolower(colnames(data)[i])
@@ -61,7 +63,7 @@ for (i in 1:length(monthYears)) {
 
 #This code removes the d variable from the environment and should speed things up
 #As the d variable is over 500mb and can cause performance issues in rstudio
-#remove(d)
+remove(d)
 
 covData <- select(covData, Appointment_Date, APPT_STATUS, HCP_TYPE, APPT_MODE, TIME_BETWEEN_BOOK_AND_APPT, CCG_CODE,
                   COUNT_OF_APPOINTMENTS) %>%
@@ -119,14 +121,16 @@ appt_count <- function(data, filter = "No Filter"){
     #Updating data with filter
     data <- data %>%
       filter(appt_mode == filter)
+    
+  model <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = data)
     #Plot with no filter (include legend)
   output <- data %>%
-    ggplot(aes(x = week_num, y = count, colour = season_median)) + 
-    geom_point() +
-    geom_smooth(colour = "blue", se = FALSE) + 
-    geom_smooth(method = "lm", colour = "red", se = FALSE) +
+    mutate(poisson_estimate = predict(model, type = "response")) %>%
+    ggplot(aes(x = week_num)) + 
+    geom_point(aes(y = count, colour = season_median)) +
+    geom_line(aes(y = poisson_estimate)) +
     theme_bw() +
-    labs(title = paste0("Weekly Appointment Count with: ", filter),
+    labs(title = paste0(filter, " Weekly Appointment Count with Poisson Regression Line"),
          x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
     scale_colour_manual("Season", values = c("darkorange1", "springgreen3","gold", "royalblue2"))
   }else{
@@ -134,7 +138,7 @@ appt_count <- function(data, filter = "No Filter"){
     ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
     geom_point() +
     theme_bw()  + 
-    labs(title = paste0("Weekly Appointment Count with: ", filter),
+    labs(title = paste0("Weekly Appointment Count by Appointment Type"),
          x = "Week Number", y = "Weekly Appointment Count", colour = "Appointment Type")
   }
   
@@ -268,48 +272,47 @@ data <- data %>%
 ```
 
 ## Fitting a poison model to the data as in the lab
-Doesn't work at the moment
+Doesn't work at the moment can delete this section later as implemented into function.
 ```{r}
-###One appointment type
-po_data <- appt_by_mode
-  
-my_model <- glm(count ~ 0  + week_num + season_median + appt_mode, family = "poisson", data = po_data)#+ appt_mode
-summary(my_model)
-
-poisson_data <- po_data %>%
-  mutate(poisson_estimate = predict(my_model, type = "response")) %>%
-  ggplot() +
-  geom_point(aes(x = week_num, y = count), colour = "red") +
-  geom_line(aes(x = week_num, y = poisson_estimate)) 
-  +
-  geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue")
-  
-  + 
-  smooth.spline(poisson_estimate)
-poisson_data
-
-
-
-#Massively overfitted to be honest
-po_data <- appt_by_mode %>%
-   mutate(year_week = as_factor(if_else(week_num > 52, week_num - 52, week_num))) %>%
-  filter(appt_mode == "Telephone")
-my_model_1 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = po_data)
-my_model_2 <- glm(count ~ 0  + week_num + season_median  + year_week, family = "poisson", data = po_data)#+ appt_mode
-
-poisson_data <- po_data %>%
-  mutate(poisson_estimate = predict(my_model_1, type = "response")) %>%
-  mutate(overfitted_estimate = predict(my_model_2, type = "response")) %>%
-  ggplot() +
-  geom_point(aes(x = week_num, y = count), colour = "red") +
-  geom_line(aes(x = week_num, y = poisson_estimate))# +
-  #geom_line(aes(x = week_num, y = overfitted_estimate)) 
-+
-  geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue") 
-poisson_data
-
-
-summary(my_model)
+# po_data <- appt_by_mode
+#   
+# my_model <- glm(count ~ 0  + week_num + season_median + appt_mode, family = "poisson", data = po_data)#+ appt_mode
+# summary(my_model)
+# 
+# poisson_data <- po_data %>%
+#   mutate(poisson_estimate = predict(my_model, type = "response")) %>%
+#   ggplot() +
+#   geom_point(aes(x = week_num, y = count), colour = "red") +
+#   geom_line(aes(x = week_num, y = poisson_estimate)) 
+#   +
+#   geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue")
+#   
+#   + 
+#   smooth.spline(poisson_estimate)
+# poisson_data
+# 
+# 
+# 
+# #Massively overfitted to be honest
+# po_data <- appt_by_mode %>%
+#    mutate(year_week = as_factor(if_else(week_num > 52, week_num - 52, week_num))) %>%
+#   filter(appt_mode == "Telephone")
+# my_model_1 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = po_data)
+# my_model_2 <- glm(count ~ 0  + week_num + season_median  + year_week, family = "poisson", data = po_data)#+ appt_mode
+# 
+# poisson_data <- po_data %>%
+#   mutate(poisson_estimate = predict(my_model_1, type = "response")) %>%
+#   mutate(overfitted_estimate = predict(my_model_2, type = "response")) %>%
+#   ggplot() +
+#   geom_point(aes(x = week_num, y = count), colour = "red") +
+#   geom_line(aes(x = week_num, y = poisson_estimate))# +
+#   #geom_line(aes(x = week_num, y = overfitted_estimate)) 
+# +
+#   geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue") 
+# poisson_data
+# 
+# 
+# summary(my_model)
 ```
 
 
@@ -354,11 +357,19 @@ stat_data <- data %>%
   select(appt_mode, week_num, season_median, year, count) %>% 
   unique()
   
-stat_test <- function(data, type, season){
+stat_test <- function(data = stat_data, type = "NA", season = "NA"){
 #Updating data
-temp_data <- stat_data %>%
-  filter(season_median == season) %>%
-  filter(appt_mode == type)  
+  
+temp_data <- data
+  if(type != "NA"){
+    temp_data <- temp_data %>%
+      filter(appt_mode == type)
+  }
+
+  if(season != "NA"){
+    temp_data <- temp_data %>%
+      filter(season_median == season)
+  }
   
 #Test the normality assumption of the data
 normal <- TRUE
@@ -441,7 +452,10 @@ output
 }
 
 #Now run the paired T-Test on the data
-stat_table <- stat_test(stat_data, "Telephone", "summer") %>%
+stat_table <- stat_test(type = "Telephone") %>%
+  rbind(stat_test(type = "Face-to-Face")) %>%
+  rbind(stat_test(type = "Home Visit")) %>%
+  rbind(stat_test(stat_data, "Telephone", "summer")) %>%
   rbind(stat_test(stat_data, "Telephone", "winter")) %>%
   rbind(stat_test(stat_data, "Telephone", "spring")) %>%
   rbind(stat_test(stat_data, "Face-to-Face", "summer")) %>%
@@ -451,13 +465,13 @@ stat_table <- stat_test(stat_data, "Telephone", "summer") %>%
   rbind(stat_test(stat_data, "Home Visit", "winter")) %>%
   rbind(stat_test(stat_data, "Home Visit", "spring"))
 stat_table
+
+#Only non significant data point in Telephone is winter but not really enough variables to accurately test this.
 ```
 The outcome from this table demonstrates that there is a statistically significant increase in the number of appointments between the 2018 and 2019 dates for all appointment types and seasons considered.
 
 
 # Second assignment Questions
-
-
 ```{r}
 data_2 <- part_2_data
 
@@ -479,7 +493,6 @@ data_2 <- data_2 %>%
   filter(appt_status %in% c("Attended", "DNA")) %>%
   #Only looking at the GP appointments not attended
   filter(hcp_type == "GP")
-
 
 data_2 %>%
   group_by(appt_status, time_between_book_and_appt) %>%
@@ -543,15 +556,6 @@ plot <- anova_data %>%
 plot
 
 #http://www.sthda.com/english/wiki/ggplot2-violin-plot-quick-start-guide-r-software-and-data-visualization
-  #https://katherinemwood.github.io/post/violins/
-
-anova_data %>%
-  ggplot(aes(x = time_between_book_and_appt, y = percentage_attendence)) +
-  geom_violin(aes(fill = time_between_book_and_appt)) +
-  theme_bw() +
-  labs(y = "Percentage of Appointments not Attended",x = "Time between Booking and Appointment",
-       title = "Percentage of Appointments not Attended vs Appointment Waiting Time") +
-  theme(legend.position = "none") + 
-scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
+#https://katherinemwood.github.io/post/violins/
                  
 ```
