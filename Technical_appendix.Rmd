@@ -114,6 +114,42 @@ There has also been no subsetting based on hcp_type -> might need to add that in
 
 Want really to compare results for which we have two measurements for in almost a paired t-test but only 18 months is slightly problematic...
 
+## Model exploration
+
+```{r model summaries}
+model1 <- glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face"))
+model2 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face"))
+
+
+model3 <-  glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Telephone"))
+model4 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Telephone"))
+model3 %>% summary()
+model4 %>% summary()
+# summary(glm(count ~ 0  + week_num + season_median, family = "poisson", data = appt_by_mode %>%
+#               filter(appt_mode == "Home Visit")))
+
+glm(count ~ season_median + week_num, family = "poisson", data = appt_by_mode) %>%
+  summary()
+a <- glm(count ~ season_median + week_num, family = "poisson", data = appt_by_mode) %>% summary()
+sum((residuals(a))^2)
+
+typeof(appt_by_mode$season_median)
+model1 %>% summary()
+model2 %>% summary()
+#No idea why no pr > Chisq??? No idea what this is doing :/
+anova(glm(count ~ 0 + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face")),
+      glm(count ~0 +  week_num +season_median, family = "poisson", data = appt_by_mode %>%
+        filter(appt_mode == "Face-to-Face")))
+#Basically shows model 2 with season so much better
+BIC(model1)
+BIC(model2)
+```
+
 ```{r demand_functions, warning=FALSE}
 #Graphing function for visual aids on the appointment counts
 appt_count <- function(data, filter = "No Filter"){
@@ -133,6 +169,7 @@ appt_count <- function(data, filter = "No Filter"){
     labs(title = paste0(filter, " Weekly Appointment Count with Poisson Regression Line"),
          x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
     scale_colour_manual("Season", values = c("darkorange1", "springgreen3","gold", "royalblue2"))
+
   }else{
   output <- data %>%
     ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
@@ -143,6 +180,7 @@ appt_count <- function(data, filter = "No Filter"){
   }
   
   output
+  
 }
 ```
  
@@ -249,14 +287,17 @@ data <- data %>%
 appt_by_mode <- data %>% 
   group_by(appt_mode, week_num, season_median) %>%
   summarise(count = sum(count_of_appointments)) %>%
-  ungroup()
+  ungroup() %>%
+  mutate(season_median = factor(season_median,
+                                levels = c("spring", "summer","autumn", "winter")))
+  
 
 appt_by_mode %>%
   appt_count()
 
 appt_by_mode %>%
   appt_count("Face-to-Face")
-
+#Autumn shift not taken account of in the year 1 vs year 2 comparison and could yeild a no change when a ctual change...
 appt_by_mode %>%
   appt_count("Home Visit")
 
@@ -271,49 +312,6 @@ data <- data %>%
   inner_join(appt_by_mode)
 ```
 
-## Fitting a poison model to the data as in the lab
-Doesn't work at the moment can delete this section later as implemented into function.
-```{r}
-# po_data <- appt_by_mode
-#   
-# my_model <- glm(count ~ 0  + week_num + season_median + appt_mode, family = "poisson", data = po_data)#+ appt_mode
-# summary(my_model)
-# 
-# poisson_data <- po_data %>%
-#   mutate(poisson_estimate = predict(my_model, type = "response")) %>%
-#   ggplot() +
-#   geom_point(aes(x = week_num, y = count), colour = "red") +
-#   geom_line(aes(x = week_num, y = poisson_estimate)) 
-#   +
-#   geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue")
-#   
-#   + 
-#   smooth.spline(poisson_estimate)
-# poisson_data
-# 
-# 
-# 
-# #Massively overfitted to be honest
-# po_data <- appt_by_mode %>%
-#    mutate(year_week = as_factor(if_else(week_num > 52, week_num - 52, week_num))) %>%
-#   filter(appt_mode == "Telephone")
-# my_model_1 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = po_data)
-# my_model_2 <- glm(count ~ 0  + week_num + season_median  + year_week, family = "poisson", data = po_data)#+ appt_mode
-# 
-# poisson_data <- po_data %>%
-#   mutate(poisson_estimate = predict(my_model_1, type = "response")) %>%
-#   mutate(overfitted_estimate = predict(my_model_2, type = "response")) %>%
-#   ggplot() +
-#   geom_point(aes(x = week_num, y = count), colour = "red") +
-#   geom_line(aes(x = week_num, y = poisson_estimate))# +
-#   #geom_line(aes(x = week_num, y = overfitted_estimate)) 
-# +
-#   geom_jitter(aes(x = week_num, y = poisson_estimate), colour = "blue") 
-# poisson_data
-# 
-# 
-# summary(my_model)
-```
 
 
 ## Statistical significance tests
@@ -468,7 +466,7 @@ stat_table
 
 #Only non significant data point in Telephone is winter but not really enough variables to accurately test this.
 ```
-The outcome from this table demonstrates that there is a statistically significant increase in the number of appointments between the 2018 and 2019 dates for all appointment types and seasons considered.
+The outcome from this table demonstrates that there is a only a statistically significant increase in the number of appointments between the 2018 and 2019 dates for telephone appointment types.
 
 
 # Second assignment Questions
