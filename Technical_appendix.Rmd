@@ -6,9 +6,10 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning =  FALSE)
 ```
 
-```{r, libraries}
+```{r libraries, results= "hide", message=F}
 library(tidyverse)
 library(lubridate)
 library(broom)
@@ -17,14 +18,15 @@ library(coin)
 library(pgirmess)
 library(Hmisc)
 library(rio)
+library(gridExtra)
 ```
 ## Lab work
 This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets and provided a good base for exploratory data analysis in particuar for pointing out the effect of different days.
 
 
 ```{r lab_functions}
-#function to lower case column names as in general it is better and easier to refer to
-#everything in the lower case
+#function to lower case column names as in general it is better 
+#and easier to refer to everything in the lower case
 hadley_format <- function(data){
   for (i in 1:length(colnames(data))) {
   colnames(data)[i] = tolower(colnames(data)[i])
@@ -108,81 +110,8 @@ data <- inner_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_o
 ```
 
 ## Demand on Coventry GPs
- INSERT R Markdown intro:
 Since there is no data for number of GPs per practice, there is insufficient data to work out an appointment/GP number and hence demand will be modelled by overall appointments in the Cov Area. If this data had been available, then the average time of each visit type and number could have been averaged out over the GPs to find a demand average for GPs but sadly this wasn't available. Appointments which were not attended are still used for the count as the GP still had to be available to answer the person. The counts have been summed by week to take account of differences between days and too try and *absorb* some of that variability.
-There has also been no subsetting based on hcp_type -> might need to add that in potentially.
-
-Want really to compare results for which we have two measurements for in almost a paired t-test but only 18 months is slightly problematic...
-
-## Model exploration
-
-```{r model summaries}
-model1 <- glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
-              filter(appt_mode == "Face-to-Face"))
-model2 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = appt_by_mode %>%
-              filter(appt_mode == "Face-to-Face"))
-
-
-model3 <-  glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
-              filter(appt_mode == "Telephone"))
-model4 <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = appt_by_mode %>%
-              filter(appt_mode == "Telephone"))
-model3 %>% summary()
-model4 %>% summary()
-# summary(glm(count ~ 0  + week_num + season_median, family = "poisson", data = appt_by_mode %>%
-#               filter(appt_mode == "Home Visit")))
-
-glm(count ~ season_median + week_num, family = "poisson", data = appt_by_mode) %>%
-  summary()
-a <- glm(count ~ season_median + week_num, family = "poisson", data = appt_by_mode) %>% summary()
-sum((residuals(a))^2)
-
-typeof(appt_by_mode$season_median)
-model1 %>% summary()
-model2 %>% summary()
-#No idea why no pr > Chisq??? No idea what this is doing :/
-anova(glm(count ~ 0 + week_num , family = "poisson", data = appt_by_mode %>%
-              filter(appt_mode == "Face-to-Face")),
-      glm(count ~0 +  week_num +season_median, family = "poisson", data = appt_by_mode %>%
-        filter(appt_mode == "Face-to-Face")))
-#Basically shows model 2 with season so much better
-BIC(model1)
-BIC(model2)
-```
-
-```{r demand_functions, warning=FALSE}
-#Graphing function for visual aids on the appointment counts
-appt_count <- function(data, filter = "No Filter"){
-  if(!filter == "No Filter"){
-    #Updating data with filter
-    data <- data %>%
-      filter(appt_mode == filter)
-    
-  model <- glm(count ~ 0  + week_num + season_median, family = "poisson", data = data)
-    #Plot with no filter (include legend)
-  output <- data %>%
-    mutate(poisson_estimate = predict(model, type = "response")) %>%
-    ggplot(aes(x = week_num)) + 
-    geom_point(aes(y = count, colour = season_median)) +
-    geom_line(aes(y = poisson_estimate)) +
-    theme_bw() +
-    labs(title = paste0(filter, " Weekly Appointment Count with Poisson Regression Line"),
-         x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
-    scale_colour_manual("Season", values = c("darkorange1", "springgreen3","gold", "royalblue2"))
-
-  }else{
-  output <- data %>%
-    ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
-    geom_point() +
-    theme_bw()  + 
-    labs(title = paste0("Weekly Appointment Count by Appointment Type"),
-         x = "Week Number", y = "Weekly Appointment Count", colour = "Appointment Type")
-  }
-  
-  output
-  
-}
-```
+There has also been no subsetting based on hcp_type -> as all appointments is theoretically workload (if admin went through the room would still an increased workload for example)
  
 ```{r demand_setup}
 #Seasons data as per: https://www.timeanddate.com/calendar/seasons.html
@@ -226,8 +155,6 @@ seasons <- tibble(season = c("winter", "spring", "summer","autumn",
                                   , seasons$start_date[7],seasons$end_date[7]), "summer",
                                   "Error")))))))) 
  
- 
- 
 # Making adjustment as some weeks may contain dates from different seasons
 # Use median as 7 days in a week so only modal one will occur
 temp <- data %>%
@@ -258,10 +185,6 @@ appt_by_mode <- data %>%
   summarise(count = sum(count_of_appointments)) %>%
   ungroup()
 
-#General plot for understanding
-appt_by_mode %>%
-  appt_count()
-
 #Looking into the two low results for Face-to-Face
 appt_by_mode %>% 
   filter(count < 20000 & appt_mode == "Face-to-Face")
@@ -280,6 +203,123 @@ data %>%
 data <- data %>%
   filter(!week_num %in% c(9, 52)) %>%
   filter(appt_mode %in% c("Face-to-Face", "Telephone", "Home Visit"))
+
+#Looking at median season result
+median_season <- appt_by_mode %>%
+  filter(appt_mode == "Face-to-Face") %>%
+  group_by(season_median) %>%
+  summarise(F2F = median(count)) %>%
+  ungroup() %>% 
+  cbind(appt_by_mode %>%
+  filter(appt_mode == "Telephone") %>%
+  group_by(season_median) %>%
+  summarise(telephone = median(count)) %>%
+  ungroup() %>%
+  select(telephone)) %>%
+  cbind(appt_by_mode %>%
+  filter(appt_mode == "Home Visit") %>%
+  group_by(season_median) %>%
+  summarise(home_visit = median(count)) %>%
+  ungroup() %>%
+  select(home_visit))
+#Percentage of appointments which are telephone: Just approx for using value in report
+(100*sum(median_season$telephone))/(sum(median_season$telephone
+                                  + median_season$F2F + median_season$home_visit))
+```
+
+## Model exploration
+
+```{r model summaries}
+model1 <- glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face"))
+
+model1a <- glm(count ~ week_num, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face"))
+#Face to Face Model
+model2 <- glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face"))
+model2a <- glm(count ~ season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face"))
+
+model1 %>% summary()
+model1a %>% summary()
+model2 %>% summary()
+model2a %>% summary()
+BIC(model1)
+BIC(model1a)
+BIC(model2)
+BIC(model2a)
+#Model 2 and 2a the same for F2F and significantly better than Model 1 so added seasons improves model
+#Both model2 and 2a are equivilent as the intercept term is the same as the spring term in the other
+
+#Let's see if it is the same for Telephone
+
+model1 <- glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Telephone"))
+
+model1a <- glm(count ~ week_num, family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Telephone"))
+#Telephone Model
+model2 <- glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Telephone"))
+#Home Visit Model
+model2 <- glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Home Visit"))
+
+model1 %>% summary()
+model1a %>% summary()
+model2a %>% summary()
+BIC(model1)
+BIC(model1a)
+BIC(model2a)
+#Again model2(a) is the best so that's what will be used in the plotting function
+##Final Models
+
+glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Face-to-Face")) %>%
+  summary()
+glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Telephone")) %>%
+  summary()
+glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_mode %>%
+              filter(appt_mode == "Home Visit")) %>%
+  summary()
+```
+
+
+
+```{r demand_functions, warning=FALSE}
+#Graphing function for visual aids on the appointment counts
+appt_count <- function(data, filter = "No Filter"){
+  if(!filter == "No Filter"){
+    #Updating data with filter
+    data <- data %>%
+      filter(appt_mode == filter)
+    
+  model <- glm(count ~ 0  + season_median + week_num , family = "poisson", data = data)
+    #Plot with no filter (include legend)
+  output <- data %>%
+    mutate(poisson_estimate = predict(model, type = "response")) %>%
+    ggplot(aes(x = week_num)) + 
+    geom_point(aes(y = count, colour = season_median)) +
+    geom_line(aes(y = poisson_estimate)) +
+    theme_bw() +
+    labs(title = paste0(filter, " Weekly Appointment Count with Poisson Regression Line"),
+         x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
+    scale_colour_manual("Season", values = c("darkorange1", "springgreen3","gold", "royalblue2"))
+
+  }else{
+  output <- data %>%
+    ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
+    geom_point() +
+    theme_bw()  + 
+    labs(title = paste0("Weekly Appointment Count by Appointment Type"),
+         x = "Week Number", y = "Weekly Appointment Count", colour = "Appointment Type")
+  }
+  
+  output
+  
+}
 ```
 
 ```{r demand_eda_graphs}
@@ -292,17 +332,21 @@ appt_by_mode <- data %>%
                                 levels = c("spring", "summer","autumn", "winter")))
   
 
-appt_by_mode %>%
+p1 <- appt_by_mode %>%
   appt_count()
+p1
 
-appt_by_mode %>%
+p2 <- appt_by_mode %>%
   appt_count("Face-to-Face")
+p2
 #Autumn shift not taken account of in the year 1 vs year 2 comparison and could yeild a no change when a ctual change...
-appt_by_mode %>%
+p3 <- appt_by_mode %>%
   appt_count("Home Visit")
+p3
 
-appt_by_mode %>%
+p4 <- appt_by_mode %>%
   appt_count("Telephone")
+p4
 #For the purposes of the question "Unknown" will not be considered
 # appt_by_mode %>%
 #   appt_count("Unknown")
@@ -310,6 +354,16 @@ appt_by_mode %>%
 #Joining the data appt_by_mode data to original data
 data <- data %>%
   inner_join(appt_by_mode)
+
+#Could include but takes up too much room so probably just include telephone
+pic <- grid.arrange(p1,p2,p3,p4,nrow = 2)
+
+# Telephone Pic for report:
+p4 + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14),
+        plot.title = element_text(size = 22),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14))
 ```
 
 
@@ -492,19 +546,23 @@ data_2 <- data_2 %>%
   #Only looking at the GP appointments not attended
   filter(hcp_type == "GP")
 
+#Having a look at mean count
 data_2 %>%
   group_by(appt_status, time_between_book_and_appt) %>%
   summarise(c = mean(count))
 
+#temp variance to join by to get the total number of appointments for each day
 total_count <- data_2 %>%
   select(appointment_date, time_between_book_and_appt, count_of_appointments) %>%
   group_by(appointment_date, time_between_book_and_appt) %>%
   summarise(total_count = sum(count_of_appointments)) %>%
   ungroup()
 
+#
 appt_count <- data_2 %>%
   select(appointment_date, time_between_book_and_appt, appt_status, count_of_appointments) %>%
   group_by(appointment_date, time_between_book_and_appt, appt_status) %>%
+  #Has the counts for each day based on both attended and did not attend
   summarise(count = sum(count_of_appointments)) %>%
   ungroup() %>%
   inner_join(total_count) %>%
@@ -515,10 +573,22 @@ appt_count <- data_2 %>%
 				        "8  to 14 Days",	"15  to 21 Days", "22  to 28 Days","More than 28 Days")))
 
 
+appt_count %>%
+  filter(appt_status == "DNA") %>%
+  group_by(time_between_book_and_appt) %>%
+  summarise(min_visits = min(total_count),
+            max_visits = max(total_count),
+            #median_visits = median(total_count),
+            min_dna = min(percentage_attendence),
+            max_dna = max(percentage_attendence),
+            #median_dna = median(percentage_attendence)
+            )
+
 #DNA = 100 - Attended so no need to store both
 #Variables with < 20 in the number of appointments can lead to a very highly skewed output based on just a couple of
 #Did not attends
 anova_data <- appt_count %>%
+  #Filtering to get did not attend status(reverse for otherone)
   filter(appt_status == "DNA") %>%
   filter(count > 20)
 
@@ -536,9 +606,14 @@ oneway_test(percentage_attendence ~ as.factor(time_between_book_and_appt), data 
 #Seems to be all we need
 library(pgirmess)
 
-#Looks at which comparisons do NOT have the same mean
+#Looks at which comparisons do NOT have the same mean, individual comparisons
 tukey_time <- kruskalmc(anova_data$percentage_attendence, anova_data$time_between_book_and_appt)
 tukey_time
+
+##Looking at number of suitable results per category to analyse the wider variance of values as x axis increases
+anova_data %>%
+  group_by(time_between_book_and_appt) %>%
+  summarise(count =n())
 
 plot <- anova_data %>%
   ggplot(aes(x = time_between_book_and_appt, y = percentage_attendence)) +
@@ -551,9 +626,25 @@ plot <- anova_data %>%
   theme(legend.position = "none") +
   #Allowing labels to go onto 2 lines if required
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
-plot
+
+#Changing axis ready for submission
+plot + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14),
+        plot.title = element_text(size = 22))
 
 #http://www.sthda.com/english/wiki/ggplot2-violin-plot-quick-start-guide-r-software-and-data-visualization
 #https://katherinemwood.github.io/post/violins/
                  
+
+##Number of DNAs by average number of days + 1
+
+anova_data %>% 
+  group_by(time_between_book_and_appt) %>%
+  summarise(median = median(percentage_attendence)) %>%
+  ungroup() %>%
+  #Adding +1 to account for same day and giving more than 28 a value of 33
+  #to match increase from of 7 between previous
+  cbind(ave_day = c(1 , 2, 5.5, 12, 19, 26, 33)) %>%
+  mutate(per_day = median/ave_day)
+
 ```
