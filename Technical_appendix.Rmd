@@ -646,5 +646,65 @@ anova_data %>%
   #to match increase from of 7 between previous
   cbind(ave_day = c(1 , 2, 5.5, 12, 19, 26, 33)) %>%
   mutate(per_day = median/ave_day)
+```
+### Extra plots
+Looking at some other plotting methods to show interest
+
+```{r}
+#Barchart for season values ~ look at median - to account for bit drop offs or increases.
+#Needs to be done for a specific appointment type, in this case: 
+#F2F as that was only one with significant difference and good to showcase that.
+bar_df <- stat_data %>%
+  filter(appt_mode == "Face-to-Face") %>%
+  group_by(season_median) %>%
+  summarise(count = median(count)) %>%
+  arrange(desc(count)) %>%
+  #Refactoring to get high to low on the graph
+  mutate(season_median = factor(season_median,
+                                levels = c("autumn", "winter","spring", "summer")))
+
+#Base 
+# barchart <- barplot(height = bar_df$count, names = bar_df$season_median,
+#         horiz = T,
+#         xlim = c(0,40000),
+#         col = c("darkorange1","royalblue2", "springgreen3","gold"),
+#         las =1,
+#         main = "Median Weekly Appointment Count by Season",
+#         xlab = "Median Weekly Count", ylab = "Season")
+
+#GGplot
+bar_df %>%
+  ggplot( aes(count, x =season_median)) +
+  geom_bar(stat="identity", position = "dodge", aes(fill = season_median)) +
+  coord_flip() +
+  #Colours to match seasons
+  scale_fill_manual("Season", values = c("darkorange1", "royalblue2",
+                                           "springgreen3","gold" )) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  labs(title ="Median Weekly Face-to-Face Appointment Count by Season",
+       y = "Median Weekly Face-to-Face Appointment Count",
+       x = "Season")
+
+
+
+
+#3d barchart
+library(plotrix)
+#Step_1 work out percentage of appointments which come under each type
+
+pie_values <-stat_data %>%
+  group_by(appt_mode) %>%
+  summarise(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(percentage = (100 * total)/(2658098 +40910 +334646)) %>%
+  select(percentage) %>%
+  as_vector()
+
+
+ pielabels<- c("Face-to-Face","Home Visit","Telephone")
+ # grab the radial positions of the labels
+ lp<-pie3D(pie_values,radius=0.9,labels=pielabels,explode=0.4,main="3D PIE OPINIONS")
+ # lengthen the last label and move it to the left
 
 ```
