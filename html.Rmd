@@ -1,0 +1,32 @@
+---
+title: "Graphics"
+author: "Stephen Brownsey"
+date: "09/02/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r, echo=FALSE, results= "hide"}
+library(tidyverse)
+library(lubridate)
+library(broom)
+library(car)
+library(coin)
+library(pgirmess)
+library(Hmisc)
+library(rio)
+library(gridExtra)
+```
+
+```{r, echo = FALSE}
+load(file = "stevie.Rdata")
+stevieg +
+  ggtitle("Telephone Weekly Appointment Count with Poisson Regression Line")
+stevieb + ggtitle("Percentage of Appointments not Attended vs Appointment Waiting Time")
+steviebr + ggtitle("Bar Chart of Face-to-Face Median Weekly Appointment Counts by Season")
+```

@@ -304,8 +304,8 @@ appt_count <- function(data, filter = "No Filter"){
     geom_point(aes(y = count, colour = season_median)) +
     geom_line(aes(y = poisson_estimate)) +
     theme_bw() +
-    labs(title = paste0(filter, " Weekly Appointment Count with Poisson Regression Line"),
-         x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
+    #title = paste0(filter, " Weekly Appointment Count with Poisson Regression Line"),
+    labs(x = "Week Number", y = "Weekly Appointment Count", colour = "Season") +
     scale_colour_manual("Season", values = c("darkorange1", "springgreen3","gold", "royalblue2"))
 
   }else{
@@ -313,8 +313,8 @@ appt_count <- function(data, filter = "No Filter"){
     ggplot(aes(x = week_num, y = count, colour = appt_mode)) + 
     geom_point() +
     theme_bw()  + 
-    labs(title = paste0("Weekly Appointment Count by Appointment Type"),
-         x = "Week Number", y = "Weekly Appointment Count", colour = "Appointment Type")
+    #title = paste0("Weekly Appointment Count by Appointment Type"),
+    labs(x = "Week Number", y = "Weekly Appointment Count", colour = "Appointment Type")
   }
   
   output
@@ -621,14 +621,14 @@ plot <- anova_data %>%
   geom_boxplot(aes(x = time_between_book_and_appt, y = percentage_attendence), width = 0.10) +
   geom_violin(fill = NA) +
   theme_bw() +
-  labs(y = "Percentage of Appointments not Attended",x = "Time between Booking and Appointment",
-       title = "Percentage of Appointments not Attended vs Appointment Waiting Time") +
+  labs(y = "Percentage of Appointments not Attended",x = "Time between Booking and Appointment") +
+  #,title = "Percentage of Appointments not Attended vs Appointment Waiting Time"
   theme(legend.position = "none") +
   #Allowing labels to go onto 2 lines if required
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
 
 #Changing axis ready for submission
-plot + theme(axis.text=element_text(size=12),
+stevieb <- plot + theme(axis.text=element_text(size=12),
         axis.title=element_text(size=14),
         plot.title = element_text(size = 22))
 
@@ -637,7 +637,6 @@ plot + theme(axis.text=element_text(size=12),
                  
 
 ##Number of DNAs by average number of days + 1
-
 anova_data %>% 
   group_by(time_between_book_and_appt) %>%
   summarise(median = median(percentage_attendence)) %>%
@@ -645,7 +644,8 @@ anova_data %>%
   #Adding +1 to account for same day and giving more than 28 a value of 33
   #to match increase from of 7 between previous
   cbind(ave_day = c(1 , 2, 5.5, 12, 19, 26, 33)) %>%
-  mutate(per_day = median/ave_day)
+  mutate(per_day = median/ave_day) %>%
+  mutate(per_thousand = median * 10)
 ```
 ### Extra plots
 Looking at some other plotting methods to show interest
@@ -682,11 +682,9 @@ bar_df %>%
                                            "springgreen3","gold" )) +
   theme_bw() +
   theme(legend.position = "none") +
-  labs(title ="Median Weekly Face-to-Face Appointment Count by Season",
-       y = "Median Weekly Face-to-Face Appointment Count",
+  #title ="Median Weekly Face-to-Face Appointment Count by Season",
+  labs(y = "Median Weekly Face-to-Face Appointment Count",
        x = "Season")
-
-
 
 
 #3d barchart
@@ -706,5 +704,5 @@ pie_values <-stat_data %>%
  # grab the radial positions of the labels
  lp<-pie3D(pie_values,radius=0.9,labels=pielabels,explode=0.4,main="3D PIE OPINIONS")
  # lengthen the last label and move it to the left
-
+save.image(file = "stevie.Rdata")
 ```
