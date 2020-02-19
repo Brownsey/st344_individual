@@ -21,12 +21,11 @@ library(rio)
 library(gridExtra)
 ```
 ## Lab work
-This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general in terms of datasets and provided a good base for exploratory data analysis in particuar for pointing out the effect of different days.
-
+This section of the technical appendix will cover the code produced as part of lab 6, which was used to guide the starting point for the individual project work in general, especially in terms of datasets and provided a good base for exploratory data analysis in particuar for pointing out the effect of different days.
 
 ```{r lab_functions}
 #function to lower case column names as in general it is better 
-#and easier to refer to everything in the lower case
+#and easier to refer to everything in the lower case + I am a Hadley fanboy
 hadley_format <- function(data){
   for (i in 1:length(colnames(data))) {
   colnames(data)[i] = tolower(colnames(data)[i])
@@ -110,10 +109,10 @@ data <- inner_join(covData, app_gp_coverage, by = c("ccg_code" = "commissioner_o
 ```
 
 ## Demand on Coventry GPs
-Since there is no data for number of GPs per practice, there is insufficient data to work out an appointment/GP number and hence demand will be modelled by overall appointments in the Cov Area. If this data had been available, then the average time of each visit type and number could have been averaged out over the GPs to find a demand average for GPs but sadly this wasn't available. Appointments which were not attended are still used for the count as the GP still had to be available to answer the person. The counts have been summed by week to take account of differences between days and too try and *absorb* some of that variability.
-There has also been no subsetting based on hcp_type -> as all appointments is theoretically workload (if admin went through the room would still an increased workload for example)
+Since there is no data for number of GPs per practice, there is insufficient data to work out an appointment/GP number and hence demand will be modelled by overall appointments in the Cov Area. If this data had been available, then the average time of each visit type and number could have been averaged out over the GPs to find a demand average for GPs but sadly this wasn't available. Appointments which were not attended are still used for the count as the GP still had to be available to answer the person. The counts have been summed by week to take account of differences between days and too try and *absorb* some of that variability and allows for working days to not be a factor.
+There has also been no subsetting based on hcp_type -> as all appointments is theoretically workload (if admin went through the roof would still be an increased workload for example)
  
-```{r demand_setup}
+```{r demand_setup, warning=FALSE}
 #Seasons data as per: https://www.timeanddate.com/calendar/seasons.html
 seasons <- tibble(season = c("winter", "spring", "summer","autumn",
                              "winter", "spring", "summer"),
@@ -222,14 +221,15 @@ median_season <- appt_by_mode %>%
   summarise(home_visit = median(count)) %>%
   ungroup() %>%
   select(home_visit))
+median_season
 #Percentage of appointments which are telephone: Just approx for using value in report
 (100*sum(median_season$telephone))/(sum(median_season$telephone
                                   + median_season$F2F + median_season$home_visit))
 ```
 
 ## Model exploration
-
-```{r model summaries}
+Plotting a couple of models to see whether 
+```{r model summaries, warning=FALSE}
 model1 <- glm(count ~ 0  + week_num, family = "poisson", data = appt_by_mode %>%
               filter(appt_mode == "Face-to-Face"))
 
@@ -287,9 +287,10 @@ glm(count ~ 0  + season_median + week_num , family = "poisson", data = appt_by_m
 ```
 
 
-
+Writing a plotting function to allow for more efficient code for generating plots by appointment type, default option is no filtering (all appointment types combined).
 ```{r demand_functions, warning=FALSE}
 #Graphing function for visual aids on the appointment counts
+#The filter relates to how the data is subsetted by appointment type.
 appt_count <- function(data, filter = "No Filter"){
   if(!filter == "No Filter"){
     #Updating data with filter
@@ -323,14 +324,13 @@ appt_count <- function(data, filter = "No Filter"){
 ```
 
 ```{r demand_eda_graphs}
-#Graphically exploring the different visit types and 
+#Generating the required dataset to run the appt_count graphing function on:
 appt_by_mode <- data %>% 
   group_by(appt_mode, week_num, season_median) %>%
   summarise(count = sum(count_of_appointments)) %>%
   ungroup() %>%
   mutate(season_median = factor(season_median,
                                 levels = c("spring", "summer","autumn", "winter")))
-  
 
 p1 <- appt_by_mode %>%
   appt_count()
@@ -339,7 +339,7 @@ p1
 p2 <- appt_by_mode %>%
   appt_count("Face-to-Face")
 p2
-#Autumn shift not taken account of in the year 1 vs year 2 comparison and could yeild a no change when a ctual change...
+#Autumn shift not taken account of in the year 1 vs year 2 comparison and could yeild a no change when actual change...
 p3 <- appt_by_mode %>%
   appt_count("Home Visit")
 p3
@@ -355,11 +355,11 @@ p4
 data <- data %>%
   inner_join(appt_by_mode)
 
-#Could include but takes up too much room so probably just include telephone
+#Nice to visualise side by side in Rstudio but not effective in a pdf report.
 pic <- grid.arrange(p1,p2,p3,p4,nrow = 2)
 
 # Telephone Pic for report:
-p4 + theme(axis.text=element_text(size=12),
+telephone_plot <- p4 + theme(axis.text=element_text(size=12),
         axis.title=element_text(size=14),
         plot.title = element_text(size = 22),
         legend.text = element_text(size = 12),
@@ -371,6 +371,7 @@ p4 + theme(axis.text=element_text(size=12),
 ## Statistical significance tests
 Looking at the graph generated above, makes sense that season would be a factor to the count. So will be looking into that in the following code. Use Anova test if variance assumption holds - otherwise use the kruskal wallace test. Where the assumption is that all the groups have the same variance.
 ```{r anova_seasons}
+#Function to run the test depending on assumptions
 checking_seasons <- function(data, appt_type){
   #Variance assumption (checking they are the same)
   season_check <- data %>% filter(appt_mode == appt_type) %>%
@@ -392,13 +393,14 @@ checking_seasons <- function(data, appt_type){
 tibble(appt_type = appt_type, test = test, p_value = p_value)
 }
 
+#Outputting result of seasons tests by appointment type:
 checking_seasons(data, "Face-to-Face") %>%
   bind_rows(checking_seasons(data, "Telephone")) %>%
   bind_rows(checking_seasons(data, "Home Visit"))
 
 ```
-Splitting the data by season for compared t-test would give an option to test if the seasons themselves have increased between the two years. Obviously the cold weather will lead to more illnesses.
-The following function uses a paired t-test to calculate whether the differences are statistically significant or not. It will either use a Welch's test if the variances are not equal, a students t-test if they are or if the data is not normal then it will perform a Wilcoxon Sign Ranked Test on the data. Autumn data cannot be considered as only 1 year of autumn data.
+Splitting the data by season for compared t-test would give an option to test if the seasons themselves have increased between the two years. Cold weather could lead to more illnesses.
+The following function uses a paired t-test to calculate whether the differences are statistically significant or not. It will either use a Welch's test if the variances are not equal, a students t-test if they are or if the data is not normal then it will perform a Wilcoxon Sign Ranked Test on the data. Autumn data cannot be considered as only 1 year of autumn data, which is a shortcoming in the data analysis.
 
 
 ```{r}
@@ -537,7 +539,7 @@ data_2 %>%
   unique()
 
 #Discard all data with Unknown / Data Issue and
-#Appointment status as Uknown or Appt Status Not Provided
+#Appointment status as Unknown or Appt Status Not Provided
 #As only interested in attended/Not attended appointments
 
 data_2 <- data_2 %>%
@@ -573,6 +575,8 @@ appt_count <- data_2 %>%
 				        "8  to 14 Days",	"15  to 21 Days", "22  to 28 Days","More than 28 Days")))
 
 
+
+#Look at minimum and maximum counts to see difference between
 appt_count %>%
   filter(appt_status == "DNA") %>%
   group_by(time_between_book_and_appt) %>%
@@ -628,15 +632,11 @@ plot <- anova_data %>%
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
 
 #Changing axis ready for submission
-stevieb <- plot + theme(axis.text=element_text(size=12),
+violin_plot <- plot + theme(axis.text=element_text(size=12),
         axis.title=element_text(size=14),
         plot.title = element_text(size = 22))
 
-#http://www.sthda.com/english/wiki/ggplot2-violin-plot-quick-start-guide-r-software-and-data-visualization
-#https://katherinemwood.github.io/post/violins/
-                 
-
-##Number of DNAs by average number of days + 1
+##Number of DNAs by average number of days + 1 (so as to not divide by 0)
 anova_data %>% 
   group_by(time_between_book_and_appt) %>%
   summarise(median = median(percentage_attendence)) %>%
@@ -648,12 +648,10 @@ anova_data %>%
   mutate(per_thousand = median * 10)
 ```
 ### Extra plots
-Looking at some other plotting methods to show interest
+Implemented a bar chart to showcase difference between seasonal values - using face to face appointments as that had the most obvious difference which is worth highlighting.
 
 ```{r}
 #Barchart for season values ~ look at median - to account for bit drop offs or increases.
-#Needs to be done for a specific appointment type, in this case: 
-#F2F as that was only one with significant difference and good to showcase that.
 bar_df <- stat_data %>%
   filter(appt_mode == "Face-to-Face") %>%
   group_by(season_median) %>%
@@ -663,7 +661,7 @@ bar_df <- stat_data %>%
   mutate(season_median = factor(season_median,
                                 levels = c("autumn", "winter","spring", "summer")))
 
-#Base 
+#Base R implementation 
 # barchart <- barplot(height = bar_df$count, names = bar_df$season_median,
 #         horiz = T,
 #         xlim = c(0,40000),
@@ -673,8 +671,8 @@ bar_df <- stat_data %>%
 #         xlab = "Median Weekly Count", ylab = "Season")
 
 #GGplot
-bar_df %>%
-  ggplot( aes(count, x =season_median)) +
+bar_plot <- bar_df %>%
+  ggplot( aes(count, x = season_median)) +
   geom_bar(stat="identity", position = "dodge", aes(fill = season_median)) +
   coord_flip() +
   #Colours to match seasons
@@ -685,24 +683,8 @@ bar_df %>%
   #title ="Median Weekly Face-to-Face Appointment Count by Season",
   labs(y = "Median Weekly Face-to-Face Appointment Count",
        x = "Season")
+bar_plot
 
-
-#3d barchart
-library(plotrix)
-#Step_1 work out percentage of appointments which come under each type
-
-pie_values <-stat_data %>%
-  group_by(appt_mode) %>%
-  summarise(total = sum(count)) %>%
-  ungroup() %>%
-  mutate(percentage = (100 * total)/(2658098 +40910 +334646)) %>%
-  select(percentage) %>%
-  as_vector()
-
-
- pielabels<- c("Face-to-Face","Home Visit","Telephone")
- # grab the radial positions of the labels
- lp<-pie3D(pie_values,radius=0.9,labels=pielabels,explode=0.4,main="3D PIE OPINIONS")
- # lengthen the last label and move it to the left
-save.image(file = "stevie.Rdata")
+#Saving the plots so it can be easily loaded and plotted for the .html file.
+save(telephone_plot, violin_plot, bar_plot, file = "html.RData")
 ```
