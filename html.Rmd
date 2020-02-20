@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-```{r, echo=FALSE, results= "hide"}
+```{r, echo=FALSE, results= "hide", message = F, warning = F}
 library(tidyverse)
 library(lubridate)
 library(broom)
@@ -21,12 +21,12 @@ library(pgirmess)
 library(Hmisc)
 library(rio)
 library(gridExtra)
+load(file = "html.Rdata")
 ```
 
 ```{r, echo = FALSE}
-load(file = "stevie.Rdata")
-stevieg +
+telephone_plot +
   ggtitle("Telephone Weekly Appointment Count with Poisson Regression Line")
-stevieb + ggtitle("Percentage of Appointments not Attended vs Appointment Waiting Time")
-steviebr + ggtitle("Bar Chart of Face-to-Face Median Weekly Appointment Counts by Season")
+violin_plot + ggtitle("Percentage of Appointments not Attended vs Appointment Waiting Time")
+bar_plot + ggtitle("Median Weekly Face-to-Face Appointment Counts by Season")
 ```
