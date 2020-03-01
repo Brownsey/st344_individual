@@ -522,6 +522,8 @@ stat_table <- stat_test(type = "Telephone") %>%
   rbind(stat_test(stat_data, "Home Visit", "winter")) %>%
   rbind(stat_test(stat_data, "Home Visit", "spring"))
 stat_table
+#Only included by season for face to face as none of the others were 
+#statistically significant but included the analysis here for interest
 
 #Only non significant data point in Telephone is winter but not really enough variables to accurately test this.
 ```
@@ -529,6 +531,7 @@ The outcome from this table demonstrates that there is a only a statistically si
 
 
 # Second assignment Questions
+Second question will look at whether booking time affects the percentage of the appointments not attended. Hypothesis is that as time increases so does the number of missed appoints. 
 ```{r}
 data_2 <- part_2_data
 
@@ -563,7 +566,7 @@ total_count <- data_2 %>%
   summarise(total_count = sum(count_of_appointments)) %>%
   ungroup()
 
-#
+#Getting the data in the correct format for using
 appt_count <- data_2 %>%
   select(appointment_date, time_between_book_and_appt, appt_status, count_of_appointments) %>%
   group_by(appointment_date, time_between_book_and_appt, appt_status) %>%
@@ -628,8 +631,8 @@ plot <- anova_data %>%
   geom_boxplot(aes(x = time_between_book_and_appt, y = percentage_attendence), width = 0.10) +
   geom_violin(fill = NA) +
   theme_bw() +
-  labs(y = "Percentage of Appointments not Attended",x = "Time between Booking and Appointment") +
-  #,title = "Percentage of Appointments not Attended vs Appointment Waiting Time"
+  labs(y = "Percentage of Appointments Not Attended", x = "Appointment Waiting Time") +
+  #ggtitle("Percentage of Appointments Not Attended vs Appointment Waiting Time") + 
   theme(legend.position = "none") +
   #Allowing labels to go onto 2 lines if required
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10))
@@ -668,24 +671,20 @@ bar_df <- stat_data %>%
   mutate(season_median = factor(season_median,
                                 levels = c("autumn", "winter","spring", "summer")))
 
-#Base R implementation 
+#Base R implementation - not as good just interesting to see how it works in comparison
 # barchart <- barplot(height = bar_df$count, names = bar_df$season_median,
 #         horiz = T,
-#         xlim = c(0,40000),
+#         xlim = c(0, 40000),
 #         col = c("darkorange1","royalblue2", "springgreen3","gold"),
 #         las =1,
 #         main = "Median Weekly Appointment Count by Season",
 #         xlab = "Median Weekly Count", ylab = "Season")
 
-#GGplot
-
+#GGplot implementation is much nicer
 labels <- data_frame(
   x = c(1.1, 2.1, 3.1, 4.1),
   y = rep(1, 4),
-  label = c("N = 25", "N = 25", "N = 15", "N = 13")) #bar_df %>% select(n) %>% as_vector() )
-
-
-
+  label = c("N = 25", "N = 25", "N = 15", "N = 13")) 
 
 bar_plot <- bar_df %>%
   ggplot( aes(count, x = season_median)) +
@@ -702,6 +701,6 @@ bar_plot <- bar_df %>%
   geom_text(data =labels, aes(x = x,y = y,label=label), vjust = 1, hjust = -7.25,size = 5) 
 bar_plot
 
-#Saving the plots so it can be easily loaded and plotted for the .html file.
-save(telephone_plot, violin_plot, bar_plot, file = "html.RData")
+#Saving the plots so it can be easily loaded and plotted for the .html file. (commented out as no point re-running each time)
+#save(telephone_plot, violin_plot, bar_plot, file = "html.RData")
 ```
