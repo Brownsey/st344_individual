@@ -684,7 +684,7 @@ bar_df <- stat_data %>%
 labels <- data_frame(
   x = c(1.1, 2.1, 3.1, 4.1),
   y = rep(1, 4),
-  label = c("N = 25", "N = 25", "N = 15", "N = 13")) 
+  label = c("N = 13", "N = 15", "N = 25", "N = 25")) 
 
 bar_plot <- bar_df %>%
   ggplot( aes(count, x = season_median)) +
@@ -703,4 +703,39 @@ bar_plot
 
 #Saving the plots so it can be easily loaded and plotted for the .html file. (commented out as no point re-running each time)
 #save(telephone_plot, violin_plot, bar_plot, file = "html.RData")
+```
+
+See whether season in order looks better - probably does look better but keeping previous code encase I change my mind again.
+```{r}
+#Barchart for season values ~ look at median - to account for bit drop offs or increases.
+bar_df <- stat_data %>%
+  filter(appt_mode == "Face-to-Face") %>%
+  group_by(season_median) %>%
+  summarise(count = median(count),
+            n = n()) %>%
+  arrange(desc(count)) %>%
+  #Refactoring to get high to low on the graph
+  mutate(season_median = factor(season_median,
+                                levels = c("spring", "summer", "autumn", "winter")))
+
+#GGplot implementation is much nicer
+labels <- data_frame(
+  x = c(1.1, 2.1, 3.1, 4.1),
+  y = rep(1, 4),
+  label = c("N = 25", "N = 25", "N = 13", "N = 15")) 
+
+bar_plot <- bar_df %>%
+  ggplot( aes(count, x = season_median)) +
+  geom_bar(stat="identity", position = "dodge", aes(fill = season_median)) +
+  coord_flip() +
+  #Colours to match seasons
+  scale_fill_manual("Season", values = c("springgreen3","gold", "darkorange1", "royalblue2")) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  #title ="Median Weekly Face-to-Face Appointment Count by Season",
+  labs(y = "Median Weekly Face-to-Face Appointment Count",
+       x = "Season") +
+  geom_text(data =labels, aes(x = x,y = y,label=label), vjust = 1, hjust = -7.25,size = 5) 
+bar_plot
+#save(bar_plot, file = "bar_html.RData")
 ```

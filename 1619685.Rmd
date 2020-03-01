@@ -21,11 +21,13 @@ library(Hmisc)
 library(rio)
 library(gridExtra)
 load(file = "html.Rdata")
+load(file = "bar_html.RData")
 ```
 
 ```{r, echo = FALSE}
 telephone_plot +
   ggtitle("Increase in Telephone GP Appointments with Poisson Regression Line")
-violin_plot + ggtitle("Positive Trend between Appointment Waiting Time and Missed Appointments")
-bar_plot + ggtitle("Face-to-Face Appointments Increase in the Autumn Season")
+violin_plot + ggtitle("Positive Trend between GP Appointment Waiting Time and Missed Appointments") +
+  ylab("Percentage of Appointments Not Attended")
+bar_plot + ggtitle("Face-to-Face GP Appointments Show a Peak in the Autumn Season")
 ```
