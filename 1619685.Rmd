@@ -1,5 +1,5 @@
 ---
-title: "Visualisations from ST344 Individual Project: Analysis into GP data"
+title: "Visualisations from ST344 Individual Project: Analysis into GP Data in the Area of Coventry and Rugby"
 date: "09/02/2020"
 output: html_document
 ---
@@ -28,6 +28,6 @@ load(file = "bar_html.RData")
 telephone_plot +
   ggtitle("Increase in Telephone GP Appointments with Poisson Regression Line")
 violin_plot + ggtitle("Positive Trend between GP Appointment Waiting Time and Missed Appointments") +
-  ylab("Percentage of Appointments Not Attended")
+  ylab("Percentage of GP Appointments Not Attended")
 bar_plot + ggtitle("Face-to-Face GP Appointments Show a Peak in the Autumn Season")
 ```
